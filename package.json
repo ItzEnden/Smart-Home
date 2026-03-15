@@ -9,7 +9,9 @@
     "lint": "eslint .",
     "clean": "next clean",
     "ws-server": "npx tsx server/websocket-server.ts",
+    "cv-client": "python3 cv-websocket-client.py",
     "dev:all": "concurrently \"npm run dev\" \"npm run ws-server\"",
+    "dev:all:cv": "concurrently \"npm run dev\" \"npm run ws-server\" \"npm run cv-client\"",
     "test:ws": "node scripts/test-websocket-client.js"
   },
   "dependencies": {

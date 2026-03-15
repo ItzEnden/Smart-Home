@@ -12,6 +12,7 @@ export type SensorType =
   | "temperature"
   | "humidity"
   | "water_leak"
+  | "face_recognition"
   | string;
 
 export interface SensorData {

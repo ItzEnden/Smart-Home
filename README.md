@@ -51,10 +51,60 @@ ESP8266 (WebSocket) → WebSocket Server (port 3001) → Next.js (port 3000) →
 |--------|----------|
 | `npm run dev` | Next.js (порт 3000) |
 | `npm run ws-server` | WebSocket сервер (порт 3001) |
-| `npm run dev:all` | Оба сервера |
+| `npm run cv-client` | Python клиент распознавания лиц |
+| `npm run dev:all` | Next.js + WebSocket сервер |
+| `npm run dev:all:cv` | Next.js + WebSocket сервер + CV клиент |
 | `npm run test:ws` | WebSocket тестовый клиент |
 | `npm run build` | Сборка |
 | `npm run start` | Продакшн |
+
+## Распознавание лиц
+
+### Настройка
+
+1. **Подготовка базы лиц:**
+   - Создайте папку `faces/` в корне проекта
+   - Добавьте изображения лиц в формате JPG/PNG/JPEG
+   - Имена файлов = имена пользователей (например: `denis.jpg`, `admin.png`)
+
+2. **Запуск с распознаванием:**
+```bash
+npm run dev:all:cv
+```
+
+### Требования для CV
+
+**Python 3.12+**
+
+**Библиотеки:**
+```bash
+pip install opencv-python face_recognition ultralytics numpy websockets
+```
+
+**Устройство:** Камера (индекс 0)
+
+### Сообщения WebSocket
+
+CV клиент отправляет сообщения в формате:
+```json
+{
+  "room": "street",
+  "sensor": "face_recognition",
+  "value": "Denis",
+  "timestamp": 1234567890
+}
+```
+
+**Значения:**
+- `"Denis"` — распознанное имя пользователя
+- `"CHUZHOY"` — неизвестное лицо
+- `"Searching..."` — поиск лиц в кадре
+
+### Отображение в UI
+
+- **Страница Улица** — последние распознанные лица, цветовая индикация (зеленый — известный, желтый — неизвестный)
+- **Главная страница** — карточка улицы показывает статус камеры и последнее распознавание
+- **Журнал событий** — фильтрация по типу "Распознавание лиц"
 
 ## Конфигурация (.env)
 

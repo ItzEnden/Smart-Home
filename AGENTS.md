@@ -44,6 +44,18 @@ UI Components (re-render)
 
 ## Running the Application
 
+### Docker (Recommended)
+
+```bash
+# Build Docker image
+docker build -t smart-home .
+
+# Run container
+docker run -p 3000:3000 -p 3001:3001 smart-home
+```
+
+Docker runs both Next.js (port 3000) and WebSocket server (port 3001).
+
 ### Development
 
 ```bash
@@ -192,4 +204,15 @@ node scripts/test-websocket-client.js ws://192.168.1.100:3001 --infinite
 
 - **API Key** — Set `SENSOR_API_KEY` in `.env` for authentication
 - **Validation** — Server validates all incoming data
-- 
+-
+
+## Git Branch Naming
+
+- Feature branches use appropriate prefixes: `feature/`, `bugfix/`, `hotfix/`
+- Quint reasoning branches use same prefixes as corresponding features (e.g., `feature/cv-integration`)
+- Worktrees stored in `.worktrees/<name>` (without prefix duplication)
+
+Examples:
+- CV integration → `feature/cv-integration` branch, `.worktrees/cv-integration` tree
+- Robot identification → `feature/robot-integration` branch, `.worktrees/robot-integration` tree
+ 

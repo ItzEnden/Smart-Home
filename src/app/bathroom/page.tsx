@@ -1,117 +1,168 @@
-import { TopBar } from "@/components/TopBar";
+"use client";
+import { useState, useEffect } from "react";
 import { PageTransition } from "@/components/PageTransition";
-import { Droplet, Droplets, CheckCircle2, Info, Settings2 } from "lucide-react";
+import { TopBar } from "@/components/TopBar";
+import { Droplet, CheckCircle2, AlertTriangle, Lock, Unlock } from "lucide-react";
 
 export default function BathroomPage() {
+  const [isDry, setIsDry] = useState(true);
+  const [valveOpen, setValveOpen] = useState(true);
+  const [simulateLeak, setSimulateLeak] = useState(false);
+
+  // Автоматически закрывать кран при симуляции протечки
+  useEffect(() => {
+    if (simulateLeak) {
+      setValveOpen(false);
+    }
+  }, [simulateLeak]);
+
+  const handleReset = () => {
+    setSimulateLeak(false);
+    setIsDry(true);
+    setValveOpen(true);
+  };
+
   return (
     <PageTransition className="pb-20">
       <TopBar title="Ванная" showSettings />
-      
-      <div className="p-5 grid grid-cols-1 md:grid-cols-2 gap-5 max-w-md md:max-w-none mx-auto">
-        {/* Датчик протечки */}
-        <section className="bg-white/5 backdrop-blur-xl border border-white/10 rounded-3xl p-5 relative overflow-hidden h-full flex flex-col">
-          <div className="absolute top-0 right-0 p-5">
-            <div className="w-12 h-12 bg-blue-500 rounded-2xl flex items-center justify-center shadow-lg shadow-blue-500/20">
-              <Droplet className="w-6 h-6 text-white" />
-            </div>
-          </div>
-          
-          <h2 className="text-xl font-medium">Датчик протечки</h2>
-          <p className="text-sm text-gray-400 mt-1">Защита от повреждений водой</p>
-          
-          <div className="mt-8 flex-1">
-            <div className="text-5xl font-light text-blue-400">Сухо</div>
-            <p className="text-sm text-gray-400 mt-2">Текущий статус</p>
-          </div>
-          
-          <div className="mt-6 flex items-center gap-4 text-sm">
-            <div className="flex items-center gap-2 text-blue-400">
-              <div className="w-2 h-2 rounded-full bg-blue-400" />
-              Датчик сухой
-            </div>
-            <div className="flex items-center gap-2 text-gray-400">
-              <div className="w-4 h-4 rounded-full border-2 border-gray-400 border-t-transparent" />
-              Проверено 30 сек назад
-            </div>
-          </div>
-        </section>
 
-        {/* Аварийное управление */}
-        <section className="bg-white/5 backdrop-blur-xl border border-white/10 rounded-3xl p-5 h-full flex flex-col">
-          <h3 className="text-lg font-medium mb-4 text-gray-300">Аварийное управление</h3>
-          <div className="flex-1 flex flex-col justify-center">
-            <button className="w-full bg-[#00c853] hover:bg-[#00e676] text-white font-medium py-4 rounded-2xl transition-colors flex items-center justify-center gap-2">
-              <CheckCircle2 className="w-5 h-5" />
-              Сброс аварии / Открыть воду
-            </button>
-            
-            <div className="mt-4 bg-blue-500/20 border border-blue-900/50 rounded-2xl p-4">
-              <div className="flex items-center gap-2 text-blue-400 font-medium mb-1">
-                <Info className="w-4 h-4" />
-                Важная информация
+      <div className="p-5 max-w-md md:max-w-none mx-auto space-y-5">
+        {/* Leak Sensor Status */}
+        <section className="bg-white/5 backdrop-blur-xl border border-white/10 rounded-3xl p-5 shadow-xl shadow-black/40">
+          <h3 className="text-lg font-semibold mb-4">Датчик протечки</h3>
+
+          <div className={`flex items-center gap-4 p-6 rounded-2xl ${
+            isDry && !simulateLeak
+              ? "bg-cyan-500/20 border border-cyan-500"
+              : "bg-red-500/20 border border-red-500"
+          } border-opacity-30`}>
+            <div className={`w-16 h-16 rounded-2xl flex items-center justify-center ${
+              isDry && !simulateLeak ? "bg-cyan-500/20" : "bg-red-500/20"
+            }`}>
+              <Droplet className={`w-8 h-8 ${isDry && !simulateLeak ? "text-cyan-400" : "text-red-400 animate-pulse"}`} />
+            </div>
+            <div className="flex-1">
+              <div className={`text-4xl font-bold ${isDry && !simulateLeak ? "text-cyan-400" : "text-red-400"}`}>
+                {isDry && !simulateLeak ? "Сухо" : "АВАРИЯ"}
               </div>
-              <p className="text-sm text-gray-400">
-                Кнопка становится активной только после того, как датчик перестанет обнаруживать влагу
-              </p>
+              <div className="text-sm text-gray-400 mt-1">
+                {isDry && !simulateLeak
+                  ? "Нормальное состояние"
+                  : "Обнаружена протечка воды!"}
+              </div>
             </div>
           </div>
         </section>
 
-        {/* Запорный механизм */}
-        <section className="bg-white/5 backdrop-blur-xl border border-white/10 rounded-3xl p-5 h-full flex flex-col">
-          <h3 className="text-lg font-medium mb-4 text-gray-300">Запорный механизм</h3>
-          <div className="bg-black/40 border border-white/5 rounded-2xl p-4 flex items-center gap-4 flex-1">
-            <div className="w-12 h-12 bg-blue-500 rounded-xl flex items-center justify-center">
-              <Droplets className="w-6 h-6 text-white" />
+        {/* Valve Status */}
+        <section className={`bg-white/5 backdrop-blur-xl border border-white/10 rounded-3xl p-5 shadow-xl shadow-black/40 ${
+          !isDry || simulateLeak ? "opacity-50" : ""
+        }`}>
+          <h3 className="text-lg font-semibold mb-4">Запорный механизм</h3>
+
+          <div className={`flex items-center gap-4 p-6 rounded-2xl ${
+            valveOpen && isDry
+              ? "bg-blue-500/20 border border-blue-500"
+              : "bg-gray-700/50 border border-white/5"
+          }`}>
+            <div className={`w-16 h-16 rounded-2xl flex items-center justify-center ${
+              valveOpen && isDry ? "bg-blue-500/20" : "bg-gray-700"
+            }`}>
+              {valveOpen && isDry ? (
+                <Unlock className="w-8 h-8 text-blue-400" />
+              ) : (
+                <Lock className="w-8 h-8 text-gray-500" />
+              )}
             </div>
-            <div>
-              <div className="text-sm text-gray-400">Положение крана</div>
-              <div className="text-xl font-medium text-blue-400">Открыт</div>
+            <div className="flex-1">
+              <div className={`text-4xl font-bold ${valveOpen && isDry ? "text-blue-400" : "text-gray-400"}`}>
+                {valveOpen && isDry ? "Открыт" : "Закрыт"}
+              </div>
+              <div className="text-sm text-gray-400 mt-1">
+                {valveOpen && isDry
+                  ? "Нормальное состояние"
+                  : !isDry || simulateLeak
+                    ? "Автоматически перекрыт из-за аварии"
+                    : "Кран перекрыт"}
+              </div>
             </div>
           </div>
         </section>
 
-        {/* Система защиты */}
-        <section className="bg-white/5 backdrop-blur-xl border border-white/10 rounded-3xl p-5 h-full flex flex-col">
-          <h3 className="text-lg font-medium mb-4 text-gray-300">Система защиты</h3>
-          
-          <div className="space-y-4 flex-1">
-            <div className="flex gap-4">
-              <div className="mt-1"><Droplet className="w-5 h-5 text-blue-400" /></div>
+        {/* Emergency Control */}
+        <section className={`bg-white/5 backdrop-blur-xl border border-white/10 rounded-3xl p-5 shadow-xl shadow-black/40 ${
+          !isDry || simulateLeak ? "opacity-50" : ""
+        }`}>
+          <h3 className="text-lg font-semibold mb-4">Аварийное управление</h3>
+
+          <button
+            onClick={handleReset}
+            disabled={!isDry || simulateLeak}
+            className={`w-full p-4 rounded-2xl flex items-center justify-center gap-4 transition-all ${
+              isDry && !simulateLeak
+                ? "bg-emerald-500/20 border border-emerald-500 text-emerald-400"
+                : "bg-gray-700/50 border border-white/5 text-gray-400"
+            }`}
+          >
+            <CheckCircle2 className="w-6 h-6" />
+            <div className="text-left">
+              <div className="text-lg font-bold">Сбросить аварию</div>
+              <div className="text-xs text-gray-400">
+                {!isDry || simulateLeak
+                  ? "Доступно только после устранения причины протечки"
+                  : "Открыть запорный механизм и восстановить нормальный режим"}
+              </div>
+            </div>
+          </button>
+        </section>
+
+        {/* Alert Banner */}
+        {(!isDry || simulateLeak) && (
+          <section className="bg-red-500 border border-red-500 rounded-3xl p-4">
+            <div className="flex items-center gap-3">
+              <AlertTriangle className="w-6 h-6 text-white animate-pulse" />
               <div>
-                <div className="font-medium text-gray-200">Непрерывный мониторинг</div>
-                <div className="text-sm text-gray-400">Датчик проверяет наличие влаги каждые 2 секунды</div>
+                <div className="font-bold text-white">
+                  {simulateLeak
+                    ? "ВНИМАНИЕ! Симуляция протечки"
+                    : "ВНИМАНИЕ! Обнаружена протечка воды"}
+                </div>
+                <div className={`text-sm mt-1 ${simulateLeak ? "text-red-100" : "text-red-100"}`}>
+                  {simulateLeak
+                    ? "Это тестовый режим. Нажмите кнопку сброса для возврата в норму."
+                    : "Система автоматически перекрыла воду. Немедленно устраните причину протечки и нажмите сброс."}
+                </div>
               </div>
             </div>
-            <div className="flex gap-4">
-              <div className="mt-1"><Settings2 className="w-5 h-5 text-orange-400" /></div>
-              <div>
-                <div className="font-medium text-gray-200">Автоматическое перекрытие</div>
-                <div className="text-sm text-gray-400">При обнаружении воды кран поворачивается на 90° за 2 секунды</div>
-              </div>
-            </div>
-             <div className="flex gap-4">
-              <div className="mt-1"><Droplets className="w-5 h-5 text-purple-400" /></div>
-              <div>
-                <div className="font-medium text-gray-200">Telegram уведомления</div>
-                <div className="text-sm text-gray-400">Мгновенное уведомление о срабатывании датчика</div>
-              </div>
-            </div>
-          </div>
+          </section>
+        )}
 
-          <div className="mt-6 bg-emerald-500/10 border border-green-900/50 rounded-2xl p-4">
-            <div className="flex items-center gap-2 text-[#00c853] font-medium mb-1">
-              <CheckCircle2 className="w-4 h-4" />
-              Система защиты активна
+        {/* Safe State Banner */}
+        {isDry && !simulateLeak && (
+          <section className="bg-emerald-500/10 border border-emerald-500/30 rounded-3xl p-4">
+            <div className="flex items-center gap-3 text-emerald-400">
+              <CheckCircle2 className="w-6 h-6" />
+              <div>
+                <div className="font-bold">Система защиты активна</div>
+                <div className="text-sm text-emerald-300">
+                  Датчик контролирует наличие влаги каждые 2 секунды
+                </div>
+              </div>
             </div>
-            <p className="text-sm text-gray-400">
-              Непрерывный контроль протечек работает
-            </p>
-          </div>
-        </section>
+          </section>
+        )}
 
-        <button className="md:col-span-2 w-full bg-amber-500/20 hover:bg-amber-500/30 text-[#ffb300] font-medium py-4 rounded-2xl transition-colors mt-2">
-          Симуляция протечки
+        {/* Simulate Button */}
+        <button
+          onClick={() => setSimulateLeak(!simulateLeak)}
+          disabled={!isDry}
+          className={`w-full py-4 rounded-2xl font-medium transition-all ${
+            simulateLeak
+              ? "bg-gray-700 hover:bg-gray-600 text-gray-300"
+              : "bg-amber-500/20 hover:bg-amber-500/30 text-amber-400 border border-amber-500/30"
+          } ${!isDry ? "opacity-50" : ""}`}
+        >
+          {simulateLeak ? "Сбросить симуляцию" : "Симулировать протечку"}
         </button>
       </div>
     </PageTransition>

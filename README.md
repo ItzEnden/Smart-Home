@@ -4,14 +4,23 @@
 
 ## Запуск
 
-**Требования:** Node.js 20+
+### Docker (Рекомендуется)
+
+```bash
+docker build -t smart-home .
+docker run -p 3000:3000 -p 3001:3001 smart-home
+```
+
+Откройте http://localhost:3000
+
+### Локальная разработка
+
+**Требования:** Node.js 20+, Docker (опционально)
 
 ```bash
 npm install
 npm run dev:all
 ```
-
-Откройте http://localhost:3000
 
 ## Архитектура
 
@@ -45,7 +54,15 @@ ESP8266 (WebSocket) → WebSocket Server (port 3001) → Next.js (port 3000) →
 
 **Типы датчиков:** `gas`, `motion`, `temperature`, `humidity`, `water_leak`
 
-## NPM Скрипты
+## Docker Команды
+
+| Команда | Описание |
+|---------|----------|
+| `docker build -t smart-home .` | Сборка образа |
+| `docker run -p 3000:3000 -p 3001:3001 smart-home` | Запуск контейнера |
+| `docker compose up` | Запуск через docker-compose |
+
+### NPM Скрипты (для разработки)
 
 | Скрипт | Описание |
 |--------|----------|
@@ -67,9 +84,16 @@ NEXT_PUBLIC_WS_URL=ws://localhost:3001  # опционально
 
 ## Тестирование
 
+### Docker
+
+```bash
+# Запуск контейнера
+docker run -p 3000:3000 -p 3001:3001 smart-home
+```
+
 ### WebSocket Тестовый Клиент
 
-Скрипт для симуляции ESP8266 сенсоров.
+Скрипт для симуляции ESP8266 сенсоров (требует Node.js).
 
 ```bash
 # Одиночный тест (5 сообщений, затем выход)

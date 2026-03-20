@@ -9,7 +9,7 @@ Next.js application for Smart Home control panel with ESP8266 sensor integration
 - **Styling:** Tailwind CSS
 - **Animations:** Motion
 - **Communication:** WebSocket (real-time bidirectional)
-- **Hardware:** ESP8266 (MQ-2 gas sensor, PIR motion sensor)
+- **Hardware:** ESP8266 (MQ-2 gas sensor, PIR motion sensor, DHT11 temp/humidity, water leak)
 
 ## Architecture
 
@@ -25,7 +25,7 @@ Next.js application for Smart Home control panel with ESP8266 sensor integration
 ```
 ESP8266 Sensors
      │
-     │ WebSocket (real-time, bidirectional)
+     │ WebSocket (sensor data: gas, motion, temp, humidity, water_leak)
      ▼
 WebSocket Server (port 3001)
      │
@@ -36,6 +36,29 @@ sensor-store.ts (Map)
      │ Real-time WebSocket updates
      ▼
 useSensorData hooks
+     │
+     │ React state update
+     ▼
+UI Components (re-render)
+
+
+Client (Browser)
+     │
+     │ WebSocket (device_command: fan on/off, light control)
+     ▼
+WebSocket Server (port 3001)
+     │
+     │ Forward to ESP device
+     ▼
+ESP8266 Device
+     │
+     │ Execute command + broadcast new state
+     ▼
+WebSocket Server
+     │
+     │ Broadcast (device_state)
+     ▼
+useDeviceState hooks
      │
      │ React state update
      ▼
@@ -101,13 +124,23 @@ npm run ws-server      # WebSocket on port 3001
 
 ### Room to Device Mapping
 
-| Room | Device ID | Sensors |
-|------|-----------|---------|
-| `kitchen` | `esp_kitchen_01` | MQ-2 (gas) |
-| `hallway` | `esp_hallway_01` | PIR (motion) |
-| `bathroom` | `esp_bathroom_01` | water_leak |
-| `office` | `esp_office_01` | humidity, temperature |
-| `street` | `esp_street_01` | — |
+| Room | Device ID | Sensors | Control |
+|------|-----------|---------|---------|
+| `kitchen` | `esp_kitchen_01` | MQ-2 (gas) | `kitchen_fan` |
+| `hallway` | `esp_hallway_01` | PIR (motion) | — |
+| `bathroom` | `esp_bathroom_01` | water_leak | — |
+| `office` | `esp_office_01` | DHT11 (temp, humidity) | — |
+| `street` | `esp_street_01` | Camera | — |
+
+### Device Control
+
+**Client → Server:** `{type: "device_command", device: "kitchen_fan", action: "set_state", state: true}`
+
+**Server → ESP:** `{device: "fan", state: true}`
+
+**Server → Client:** `{type: "device_state", device: "kitchen_fan", value: "on"}`
+
+Use `useDeviceState("kitchen_fan")` hook for control.
 
 ## Project Structure
 
@@ -144,9 +177,9 @@ Smart-Home/
 │   │   ├── PageTransition.tsx    # Page transition wrapper
 │   │   └── TopBar.tsx            # Top navigation bar
 │   ├── hooks/
-│   │   └── useSensorData.ts      # React hooks for WebSocket
+│   │   └── useSensorData.ts      # React hooks for WebSocket (useGasSensor, useDeviceState, useSensorData)
 │   └── lib/
-│       └── sensor-store.ts       # Sensor data storage
+│       └── sensor-store.ts       # Sensor data storage utilities
 ├── .env                          # Environment variables
 ├── README.md                     # Project documentation
 ├── next.config.ts                # Next.js configuration
@@ -183,13 +216,12 @@ node scripts/test-websocket-client.js ws://192.168.1.100:3001 --infinite
 
 | File | Purpose |
 |------|---------|
-| `server/websocket-server.ts` | Standalone WebSocket server (port 3001) |
-| `scripts/test-websocket-client.js` | WebSocket test client for ESP simulation |
-| `src/hooks/useSensorData.ts` | React hooks for WebSocket connection |
-| `src/lib/sensor-store.ts` | In-memory sensor data storage & utilities |
-| `src/app/page.tsx` | Main dashboard with room cards |
-| `src/app/kitchen/page.tsx` | Kitchen page with gas sensor display |
-| `src/app/hallway/page.tsx` | Hallway page with motion sensor & light control |
+| `server/websocket-server.ts` | WebSocket server (port 3001) |
+| `src/hooks/useSensorData.ts` | React hooks: useGasSensor, useDeviceState, useSensorData |
+| `src/app/kitchen/page.tsx` | Kitchen: gas sensor + fan control |
+| `src/app/office/page.tsx` | Office: DHT11 temperature/humidity |
+| `src/app/hallway/page.tsx` | Hallway: motion sensor |
+| `src/components/Office/` | Office components (ClimateIndicators, ManualControls) |
 
 ## Environment Variables
 

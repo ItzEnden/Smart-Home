@@ -1,202 +1,223 @@
 "use client";
-import { TopBar } from "@/components/TopBar";
+import { useState, useEffect } from "react";
 import { PageTransition } from "@/components/PageTransition";
-import { Wind, Activity, CheckCircle2, Smartphone } from "lucide-react";
-import { useGasSensor } from "@/hooks/useSensorData";
+import { TopBar } from "@/components/TopBar";
+import { Wind, CheckCircle2, AlertTriangle } from "lucide-react";
+import { useGasSensor, useDeviceState } from "@/hooks/useSensorData";
 
 const GAS_DEVICE_ID = "esp_kitchen_01";
+const FAN_DEVICE_ID = "kitchen_fan";
 
 export default function KitchenPage() {
-  const { value, isSafe, status, loading, history, hasData } =
-    useGasSensor(GAS_DEVICE_ID);
+  const { value, isSafe, status, loading, hasData } = useGasSensor(GAS_DEVICE_ID);
+  const fanState = useDeviceState(FAN_DEVICE_ID);
+
+  const [fanAuto, setFanAuto] = useState(true);
+  const [simulateLeak, setSimulateLeak] = useState(false);
+
+  // Determine if fan should be on based on gas levels and manual/auto mode
+  const fanShouldBeOn = !isSafe || simulateLeak || (!fanAuto && fanState.isOn);
+  const fanIsOn = fanState.isOn || (!isSafe || simulateLeak);
+
+  // Debug logging
+  console.log(`[Kitchen] Render: fanState.state=${fanState.state}, fanState.isOn=${fanState.isOn}, fanIsOn=${fanIsOn}, fanAuto=${fanAuto}`);
+
+  // Debug logging
+  useEffect(() => {
+    console.log(`[KitchenPage] fanState.state=${fanState.state}, fanState.isOn=${fanState.isOn}, fanIsOn=${fanIsOn}, fanAuto=${fanAuto}`);
+  }, [fanState.state, fanState.isOn, fanIsOn, fanAuto]);
 
   const getStatusText = () => {
+    if (simulateLeak) return "Опасно";
     if (loading) return "Загрузка...";
     if (!hasData) return "Нет данных";
     if (status === "safe") return "Норма";
     if (status === "warning") return "Внимание";
-    return "Опасность";
+    return "Опасно";
   };
 
   const getStatusColor = () => {
-    if (status === "safe") return "#00e676";
-    if (status === "warning") return "#ffb300";
-    return "#ff1744";
+    if (simulateLeak) return "text-red-400";
+    if (status === "safe") return "text-green-400";
+    if (status === "warning") return "text-yellow-400";
+    return "text-red-400";
   };
 
+  const getStatusBgColor = () => {
+    if (simulateLeak) return "bg-red-500/20 border-red-500";
+    if (status === "safe") return "bg-green-500/20 border-green-500";
+    if (status === "warning") return "bg-yellow-500/20 border-yellow-500";
+    return "bg-red-500/20 border-red-500";
+  };
+
+  // Mock history data
   const getHistoryData = () => {
-    if (history.length === 0)
-      return [40, 45, 42, 50, 48, 45, 43, 40, 42, 45, 48, 50, 45, 42, 40];
-    return history
-      .slice(0, 15)
-      .map((h: { value: number | boolean | string; timestamp: string }) => {
-        const numValue = typeof h.value === "number" ? h.value : 0;
-        return Math.min(100, (numValue / 1000) * 100);
-      });
+    return [40, 45, 42, 50, 48, 45, 43, 40, 42, 45, 48, 50, 45, 42, 40];
   };
 
   return (
     <PageTransition className="pb-20">
       <TopBar title="Кухня" showSettings />
 
-      <div className="p-5 grid grid-cols-1 md:grid-cols-2 gap-5 max-w-md md:max-w-none mx-auto">
-        {/* Датчик газа */}
-        <section className="bg-white/5 backdrop-blur-xl border border-white/10 rounded-3xl p-5 relative overflow-hidden h-full flex flex-col">
-          <div className="absolute top-0 right-0 p-5">
-            <div
-              className="w-12 h-12 rounded-2xl flex items-center justify-center shadow-lg transition-colors"
-              style={{
-                backgroundColor: getStatusColor(),
-                boxShadow: `0 0 30px ${getStatusColor()}40`,
-              }}
-            >
-              <Wind className="w-6 h-6 text-white" />
+      <div className="p-5 max-w-md md:max-w-none mx-auto space-y-5">
+        {/* Gas Sensor Status */}
+        <section className="bg-white/5 backdrop-blur-xl border border-white/10 rounded-3xl p-5 shadow-xl shadow-black/40">
+          <h3 className="text-lg font-semibold mb-4">Датчик газа</h3>
+
+          <div className={`flex items-center gap-4 p-6 rounded-2xl ${getStatusBgColor()} border border-opacity-30`}>
+            <div className={`w-16 h-16 rounded-2xl flex items-center justify-center ${
+              isSafe && !simulateLeak ? "bg-green-500/20" : "bg-red-500/20"
+            }`}>
+              <Wind className={`w-8 h-8 ${getStatusColor()}`} />
             </div>
-          </div>
-
-          <h2 className="text-xl font-medium">Датчик газа</h2>
-          <p className="text-sm text-gray-400 mt-1">Контроль утечки CO/CO₂</p>
-
-          <div className="mt-8 flex-1">
-            <div
-              className="text-5xl font-light"
-              style={{ color: getStatusColor() }}
-            >
-              {getStatusText()}
+            <div className="flex-1">
+              <div className={`text-4xl font-bold ${getStatusColor()}`}>
+                {getStatusText()}
+              </div>
+              <div className="text-sm text-gray-400 mt-1">
+                {loading
+                  ? "Получение данных..."
+                  : hasData
+                    ? `Уровень: ${Math.round(value)} ppm`
+                    : "Ожидание данных от ESP..."}
+              </div>
             </div>
-            <p className="text-sm text-gray-400 mt-2">
-              {loading
-                ? "Получение данных..."
-                : hasData
-                  ? `Уровень: ${Math.round(value)}`
-                  : "Ожидание данных от ESP..."}
-            </p>
-          </div>
-
-          <div
-            className="mt-6 flex items-center gap-2 text-sm"
-            style={{ color: getStatusColor() }}
-          >
-            <div
-              className="w-2 h-2 rounded-full"
-              style={{ backgroundColor: getStatusColor() }}
-            />
-            {isSafe ? "Безопасный уровень" : "Требуется внимание"}
           </div>
         </section>
 
-        {/* Управление вентиляцией */}
-        <section className="bg-white/5 backdrop-blur-xl border border-white/10 rounded-3xl p-5 h-full flex flex-col">
-          <h3 className="text-lg font-medium mb-4 text-gray-300">
-            Управление вентиляцией
-          </h3>
-          <div className="bg-black/40 border border-white/5 rounded-2xl p-4 flex items-center justify-between flex-1">
-            <div className="flex items-center gap-4">
-              <div className="w-12 h-12 bg-white/10 rounded-xl flex items-center justify-center">
-                <Wind className="w-6 h-6 text-gray-400" />
-              </div>
-              <div>
-                <div className="text-sm text-gray-400">Вентилятор</div>
-                <div className="text-xl font-medium text-gray-300">
-                  Выключен
-                </div>
-              </div>
-            </div>
-            <button className="bg-[#00e676] hover:bg-[#00c853] text-white font-medium px-6 py-3 rounded-xl transition-colors">
-              Включить
-            </button>
-          </div>
-        </section>
-
-        {/* История показаний */}
-        <section className="bg-white/5 backdrop-blur-xl border border-white/10 rounded-3xl p-5 h-full flex flex-col">
+        {/* History Chart */}
+        <section className="bg-white/5 backdrop-blur-xl border border-white/10 rounded-3xl p-5 shadow-xl shadow-black/40">
           <div className="flex items-center justify-between mb-4">
-            <h3 className="text-lg font-medium text-gray-300">
-              История показаний
-            </h3>
-            <Activity className="w-5 h-5 text-gray-500" />
+            <h3 className="text-lg font-semibold">История показаний</h3>
+            <div className="text-xs text-gray-500">Последние 15 минут</div>
           </div>
 
-          <div className="h-32 flex items-end gap-1 flex-1">
-            {getHistoryData().map((h: number, i: number) => (
-              <div
-                key={i}
-                className="flex-1 rounded-t-sm transition-all"
-                style={{
-                  height: `${h}%`,
-                  backgroundColor:
-                    h > 70 ? "#ff1744" : h > 40 ? "#ffb300" : "#00e676",
-                }}
-              />
-            ))}
+          <div className="flex items-end gap-1 h-32">
+            {getHistoryData().map((h: number, i: number) => {
+              let barColor = "bg-green-400";
+              if (h > 70) barColor = "bg-red-400";
+              else if (h > 50) barColor = "bg-yellow-400";
+
+              return (
+                <div
+                  key={i}
+                  className="flex-1 rounded-t-sm transition-all"
+                  style={{
+                    height: `${h}%`,
+                  }}
+                >
+                  <div className={`w-full rounded-t-sm ${barColor}`} style={{ height: `${h}%` }} />
+                </div>
+              );
+            })}
           </div>
+
           <div className="flex justify-between text-xs text-gray-500 mt-2">
-            <span>10 мин назад</span>
+            <span>15 мин назад</span>
             <span>Сейчас</span>
           </div>
         </section>
 
-        {/* Автоматический контроль */}
-        <section className="bg-white/5 backdrop-blur-xl border border-white/10 rounded-3xl p-5 h-full flex flex-col">
-          <h3 className="text-lg font-medium mb-4 text-gray-300">
-            Автоматический контроль
-          </h3>
-
-          <div className="space-y-4 flex-1">
-            <div className="flex gap-4">
-              <div className="mt-1 w-6 h-6 rounded-full bg-emerald-500/20 flex items-center justify-center shrink-0">
-                <CheckCircle2 className="w-4 h-4 text-[#00c853]" />
-              </div>
-              <div>
-                <div className="font-medium text-gray-200">
-                  Мониторинг CO/CO₂
-                </div>
-                <div className="text-sm text-gray-400">
-                  Непрерывный контроль уровня углекислого и угарного газа
-                </div>
-              </div>
-            </div>
-            <div className="flex gap-4">
-              <div className="mt-1 w-6 h-6 rounded-full bg-blue-500/20 flex items-center justify-center shrink-0">
-                <Wind className="w-4 h-4 text-blue-400" />
-              </div>
-              <div>
-                <div className="font-medium text-gray-200">
-                  Автовключение вентиляции
-                </div>
-                <div className="text-sm text-gray-400">
-                  При превышении порога вентилятор включается автоматически
-                </div>
-              </div>
-            </div>
-            <div className="flex gap-4">
-              <div className="mt-1 w-6 h-6 rounded-full bg-purple-900/30 flex items-center justify-center shrink-0">
-                <Smartphone className="w-4 h-4 text-purple-400" />
-              </div>
-              <div>
-                <div className="font-medium text-gray-200">
-                  Telegram уведомления
-                </div>
-                <div className="text-sm text-gray-400">
-                  При обнаружении утечки отправляется сообщение в Telegram
-                </div>
-              </div>
+        {/* Fan Control */}
+        <section className="bg-white/5 backdrop-blur-xl border border-white/10 rounded-3xl p-5 shadow-xl shadow-black/40">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-lg font-semibold">Вентиляция</h3>
+            <div className={`flex items-center gap-2 px-3 py-1.5 rounded-lg ${fanAuto ? "bg-blue-500/20" : "bg-amber-500/20"}`}>
+              <div className={`w-2 h-2 rounded-full ${fanAuto ? "bg-blue-400" : "bg-amber-400"}`} />
+              <span className={`text-xs font-medium ${fanAuto ? "text-blue-400" : "text-amber-400"}`}>
+                {fanAuto ? "Авто" : "Ручно"}
+              </span>
             </div>
           </div>
 
-          <div className="mt-6 bg-emerald-500/10 border border-emerald-500/30 rounded-2xl p-4">
-            <div className="flex items-center gap-2 text-[#00c853] font-medium mb-1">
-              <CheckCircle2 className="w-4 h-4" />
-              Система защиты активна
+          <button
+            onClick={() => {
+              console.log(`[KitchenPage] Button clicked: fanAuto=${fanAuto}, fanState.state=${fanState.state}, fanIsOn=${fanIsOn}`);
+              if (fanAuto) {
+                // AUTO mode: switch to MANUAL
+                console.log(`[KitchenPage] Switching from AUTO to MANUAL`);
+                setFanAuto(false);
+                // Note: if fan was OFF in auto, it stays OFF. User clicks again to turn ON.
+                // This is intentional - keeps behavior predictable.
+              } else {
+                // MANUAL mode: toggle fan
+                console.log(`[KitchenPage] Calling fanState.toggle()...`);
+                fanState.toggle();
+              }
+            }}
+            disabled={!isSafe && !simulateLeak}
+            className={`w-full p-4 rounded-2xl flex items-center justify-center gap-4 transition-all ${
+              fanIsOn
+                ? "bg-green-500/20 border border-green-500 text-green-400"
+                : "bg-black/40 border border-white/5 text-gray-400 hover:bg-white/10"
+            } ${!isSafe && !simulateLeak ? "opacity-50" : ""}`}
+          >
+            <div className={`w-12 h-12 rounded-xl flex items-center justify-center ${fanIsOn ? "bg-green-500/20" : "bg-gray-700"}`}>
+              <Wind className={`w-6 h-6 ${fanIsOn && !isSafe ? "animate-spin" : ""}`} />
             </div>
-            <p className="text-sm text-gray-400">
-              Автоматический контроль работает в штатном режиме
-            </p>
-          </div>
+            <div className="text-left">
+              <div className={`text-lg font-bold ${fanIsOn ? "text-green-400" : "text-gray-400"}`}>
+                {fanIsOn ? "ВКЛ" : "ВЫКЛ"}
+              </div>
+              <div className="text-xs text-gray-500">
+                {fanAuto
+                  ? "Автоматическое включение при утечке"
+                  : fanState.loading
+                    ? "Загрузка..."
+                    : "Ручное управление"}
+              </div>
+            </div>
+          </button>
         </section>
 
-        <button className="md:col-span-2 w-full bg-amber-500/20 hover:bg-amber-500/30 text-[#ffb300] font-medium py-4 rounded-2xl transition-colors mt-2">
-          Симуляция утечки
+        {/* Alert Banner */}
+        {(status !== "safe" || simulateLeak) && (
+          <section className={`border rounded-3xl p-4 ${
+            simulateLeak
+              ? "bg-red-500 border-red-500"
+              : "bg-yellow-500/20 border-yellow-500/30"
+          }`}>
+            <div className="flex items-center gap-3">
+              <AlertTriangle className={`w-6 h-6 ${simulateLeak ? "text-white animate-pulse" : "text-yellow-400"}`} />
+              <div>
+                <div className={`font-bold ${simulateLeak ? "text-white" : "text-yellow-400"}`}>
+                  {simulateLeak ? "ВНИМАНИЕ! Симуляция утечки газа" : "ВНИМАНИЕ! Обнаружена утечка газа"}
+                </div>
+                <div className={`text-sm mt-1 ${simulateLeak ? "text-red-100" : "text-yellow-300"}`}>
+                  {simulateLeak
+                    ? "Это тестовый режим. Нажмите кнопку ниже для сброса."
+                    : "Немедленно проветрите помещение и перекройте газовый кран."}
+                </div>
+              </div>
+            </div>
+          </section>
+        )}
+
+        {/* Safe State Banner */}
+        {status === "safe" && !simulateLeak && (
+          <section className="bg-emerald-500/10 border border-emerald-500/30 rounded-3xl p-4">
+            <div className="flex items-center gap-3 text-emerald-400">
+              <CheckCircle2 className="w-6 h-6" />
+              <div>
+                <div className="font-bold">Автоматический контроль активен</div>
+                <div className="text-sm text-emerald-300">
+                  Система мониторит уровень газа в реальном времени
+                </div>
+              </div>
+            </div>
+          </section>
+        )}
+
+        {/* Simulate Button */}
+        <button
+          onClick={() => setSimulateLeak(!simulateLeak)}
+          className={`w-full py-4 rounded-2xl font-medium transition-all ${
+            simulateLeak
+              ? "bg-gray-700 hover:bg-gray-600 text-gray-300"
+              : "bg-amber-500/20 hover:bg-amber-500/30 text-amber-400 border border-amber-500/30"
+          }`}
+        >
+          {simulateLeak ? "Сбросить симуляцию" : "Симулировать утечку"}
         </button>
       </div>
     </PageTransition>

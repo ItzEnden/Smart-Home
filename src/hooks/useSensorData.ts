@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { SensorData } from "@/lib/sensor-store";
 
 interface UseSensorDataResult {
@@ -11,14 +11,27 @@ interface UseSensorDataResult {
 }
 
 interface WebSocketMessage {
-  type: "initial" | "sensor_update" | "client_count" | "error" | "ack";
+  type: "initial" | "sensor_update" | "client_count" | "error" | "ack" | "robot_update" | "device_state";
   key?: string;
   deviceId?: string;
   sensorType?: string;
-  data?: SensorData | Record<string, SensorData>;
+  data?: SensorData | Record<string, SensorData> | RobotData;
   timestamp: string;
   clientCount?: number;
   message?: string;
+  device?: string;
+  parameter?: string;
+  stateValue?: string;
+}
+
+interface RobotData {
+  isActive: boolean;
+  task: string;
+  battery: number;
+  location: string;
+  cansCollected: number;
+  isCharging?: boolean;
+  imageUrl?: string;
 }
 
 // Global WebSocket connection manager
@@ -239,9 +252,9 @@ export function useGasSensor(deviceId: string) {
     }
   }
 
-  const isSafe = gasValue < 500;
+  const isSafe = gasValue < 400;
   const status =
-    gasValue < 300 ? "safe" : gasValue < 700 ? "warning" : "danger";
+    gasValue < 360 ? "safe" : gasValue < 400 ? "warning" : "danger";
 
   return {
     value: gasValue,
@@ -358,5 +371,162 @@ export function useMultipleSensors(
   return { allData, loading, error, connected };
 }
 
+// Hook for robot data (read-only)
+export function useRobotData() {
+  const [data, setData] = useState<RobotData | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [connected, setConnected] = useState(false);
+
+  const handleMessage = useCallback(
+    (message: WebSocketMessage) => {
+      if (message.type === "error") {
+        setError(message.message || "Unknown error");
+        return;
+      }
+
+      setConnected(true);
+      setError(null);
+
+      // Handle robot updates
+      if (message.type === "robot_update" && message.data) {
+        setData(message.data as RobotData);
+        setLoading(false);
+      }
+    },
+    [],
+  );
+
+  useEffect(() => {
+    setLoading(true);
+
+    const unsubscribe = wsManager.subscribe(handleMessage);
+
+    const interval = setInterval(() => {
+      setConnected(wsManager.isConnected() || false);
+    }, 1000);
+
+    return () => {
+      unsubscribe();
+      clearInterval(interval);
+    };
+  }, [handleMessage]);
+
+  return { data, loading, error, connected };
+}
+
 // Export WebSocket manager for advanced usage
 export { wsManager };
+export type { RobotData };
+
+// Hook for device state control
+export function useDeviceState(deviceId: string) {
+  const [state, setState] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [connected, setConnected] = useState(false);
+  const deviceIdRef = useRef(deviceId);
+  const stateRef = useRef(state);
+
+  // Keep refs in sync
+  useEffect(() => {
+    deviceIdRef.current = deviceId;
+  }, [deviceId]);
+
+  useEffect(() => {
+    stateRef.current = state;
+    console.log(`[Client] State updated for ${deviceIdRef.current}:`, state, `isOn: ${state === "on"}`);
+  }, [state]);
+
+  const handleMessage = useCallback(
+    (message: WebSocketMessage) => {
+      if (message.type === "error") {
+        setError(message.message || "Unknown error");
+        return;
+      }
+
+      setConnected(true);
+      setError(null);
+
+      // Handle device state updates - use ref to avoid dependency cycle
+      if (message.type === "device_state") {
+        console.log(`[Client] device_state received:`, {
+          messageDevice: message.device,
+          ourDevice: deviceIdRef.current,
+          stateValue: message.stateValue,
+          matches: message.device === deviceIdRef.current
+        });
+        if (message.device === deviceIdRef.current) {
+          console.log(`[Client] ✓ MATCH! Updating state for ${deviceIdRef.current}:`, message.stateValue);
+          setState(message.stateValue || null);
+          setLoading(false);
+        } else {
+          console.log(`[Client] ✗ SKIP! Device ${message.device} != ${deviceIdRef.current}`);
+        }
+      }
+    },
+    [], // Empty dependencies - uses ref instead
+  );
+
+  useEffect(() => {
+    setLoading(true);
+
+    const unsubscribe = wsManager.subscribe(handleMessage);
+
+    const interval = setInterval(() => {
+      setConnected(wsManager.isConnected() || false);
+    }, 1000);
+
+    return () => {
+      unsubscribe();
+      clearInterval(interval);
+    };
+  }, [handleMessage]); // Only depends on stable handleMessage
+
+  const toggle = useCallback(() => {
+    // Use ref to get CURRENT state instead of stale closure state
+    // Treat null as "off" - fan starts in off state
+    const currentState = stateRef.current ?? "off";
+    const newState = currentState === "on" ? "off" : "on";
+    console.log(`[Client] Toggle called: deviceId=${deviceIdRef.current}, currentState=${currentState}, newState=${newState}, isOn=${state === "on"}`);
+    wsManager.send({
+      type: "device_command",
+      device: deviceIdRef.current,
+      action: "set_state",
+      state: newState === "on",
+    });
+    console.log(`[Client] Command sent: type=device_command, device=${deviceIdRef.current}, state=${newState === "on"}`);
+  }, []); // No dependencies - uses refs
+
+  const setOn = useCallback(() => {
+    console.log(`[Client] Set ON for ${deviceIdRef.current}`);
+    wsManager.send({
+      type: "device_command",
+      device: deviceIdRef.current,
+      action: "set_state",
+      state: true,
+    });
+  }, []); // No dependencies - uses ref
+
+  const setOff = useCallback(() => {
+    console.log(`[Client] Set OFF for ${deviceIdRef.current}`);
+    wsManager.send({
+      type: "device_command",
+      device: deviceIdRef.current,
+      action: "set_state",
+      state: false,
+    });
+  }, []); // No dependencies - uses ref
+
+  return {
+    state,
+    isOn: state === "on",
+    isOff: state === "off",
+    loading,
+    error,
+    connected,
+    toggle,
+    setOn,
+    setOff,
+  };
+}

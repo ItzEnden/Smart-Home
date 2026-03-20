@@ -41,3 +41,7 @@ next-env.d.ts
 # Git
 .git
 .gitignore
+.worktrees
+
+# Temp
+temp/

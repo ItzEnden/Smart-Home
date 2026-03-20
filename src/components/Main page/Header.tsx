@@ -13,7 +13,7 @@ export function Header() {
           <Link href="/events" className="rounded-full bg-white/10 backdrop-blur-xl border border-white/10 px-4 py-2 text-sm text-white hover:bg-white/20 transition-colors">
             Журнал
           </Link>
-          <Link href="/settings" className="rounded-full bg-white/5 backdrop-blur-xl border border-white/10 px-4 py-2 text-sm text-gray-400 hover:bg-white/10 transition-colors">
+          <Link href="/settings" className="rounded-full bg-white/10 backdrop-blur-xl border border-white/10 px-4 py-2 text-sm text-white hover:bg-white/20 transition-colors">
             Настройки
           </Link>
         </div>

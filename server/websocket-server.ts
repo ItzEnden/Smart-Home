@@ -16,20 +16,42 @@ interface SensorMessage {
   api_key?: string;
 }
 
+interface DeviceCommand {
+  type: "device_command";
+  device: string;
+  action: string;
+  state?: boolean;
+  value?: string | number;
+  api_key?: string;
+}
+
+interface DeviceState {
+  type: "device_state";
+  device: string;
+  parameter: string;
+  value: string;
+  timestamp: string;
+}
+
 interface BroadcastMessage {
-  type: "initial" | "sensor_update" | "client_count";
+  type: "initial" | "sensor_update" | "client_count" | "device_state";
   key?: string;
   deviceId?: string;
   sensorType?: string;
   data?: SensorData | Record<string, SensorData>;
   timestamp: string;
   clientCount?: number;
+  device?: string;
+  parameter?: string;
+  stateValue?: string;
 }
 
 // In-memory storage
 const sensorDataStore = new Map<string, SensorData>();
 const clients = new Set<WebSocket>();
 const MAX_HISTORY_LENGTH = 100;
+const deviceConnections = new Map<string, WebSocket>();
+const deviceStates = new Map<string, string>(); // Store device states: "on" | "off"
 
 // Room to device mapping
 const roomToDeviceMap: Record<string, string> = {
@@ -116,6 +138,19 @@ function sendInitialData(ws: WebSocket) {
   };
 
   ws.send(JSON.stringify(message));
+
+  // Send initial device states
+  deviceStates.forEach((stateValue, device) => {
+    const deviceState: DeviceState = {
+      type: "device_state",
+      device: device,
+      parameter: "state",
+      value: stateValue,
+      timestamp: new Date().toISOString(),
+    };
+    ws.send(JSON.stringify(deviceState));
+    console.log(`[WebSocket] Initial state sent: ${device}=${stateValue}`);
+  });
 }
 
 // Validate API key
@@ -174,10 +209,70 @@ wss.on("connection", (ws: WebSocket, req) => {
   // Handle incoming messages
   ws.on("message", (data: Buffer) => {
     try {
-      const message: SensorMessage = JSON.parse(data.toString());
+      const message = JSON.parse(data.toString());
 
-      // Validate API key
-      if (!validateApiKey(message.api_key)) {
+      // Handle device_command from clients
+      if (message.type === "device_command") {
+        const command = message as DeviceCommand;
+
+        // For now, just broadcast the command (ESP integration will be added later)
+        console.log(`[WebSocket] Device command received: device=${command.device}, action=${command.action}, state=${command.state}`);
+
+        // Send command to ESP device if connected
+        const espConnection = deviceConnections.get(command.device);
+        if (espConnection && espConnection.readyState === WebSocket.OPEN) {
+          // Convert to ESP format: {"device": "fan", "state": true/false}
+          const espCommand = {
+            device: command.device === "kitchen_fan" ? "fan" : command.device,
+            state: command.state === true
+          };
+          const jsonString = JSON.stringify(espCommand);
+          espConnection.send(jsonString);
+          console.log(`[WebSocket] ✓ Command sent to ESP:`, espCommand);
+          console.log(`[WebSocket] Raw JSON:`, jsonString);
+        } else {
+          console.log(`[WebSocket] ⚠ No ESP connection for device: ${command.device} (broadcasting anyway)`);
+        }
+
+        // Simulate device state update (replace with actual ESP response handling)
+        const stateValue = command.state === true ? "on" : "off";
+
+        // Store device state in memory
+        deviceStates.set(command.device, stateValue);
+        console.log(`[WebSocket] Stored device state: ${command.device}=${stateValue}`);
+
+        const deviceState: DeviceState = {
+          type: "device_state",
+          device: command.device,
+          parameter: command.action,
+          value: stateValue,
+          timestamp: new Date().toISOString(),
+        };
+
+        console.log(`[WebSocket] Broadcasting device_state:`, {
+          type: deviceState.type,
+          device: deviceState.device,
+          stateValue: stateValue,
+          clientsCount: clients.size
+        });
+        broadcast(deviceState as unknown as BroadcastMessage);
+
+        // Send acknowledgment
+        ws.send(
+          JSON.stringify({
+            type: "ack",
+            device: command.device,
+            timestamp: new Date().toISOString(),
+          }),
+        );
+        return;
+      }
+
+      // Handle sensor data from ESP devices
+      const sensorMessage = message as SensorMessage;
+
+      // Validate API key for sensor messages
+      if (!validateApiKey(sensorMessage.api_key)) {
         ws.send(
           JSON.stringify({
             type: "error",
@@ -188,27 +283,32 @@ wss.on("connection", (ws: WebSocket, req) => {
         return;
       }
 
-      // Handle sensor data from ESP devices
-      if (message.room && message.sensor && message.value !== undefined) {
+      // Handle sensor data
+      if (sensorMessage.room && sensorMessage.sensor && sensorMessage.value !== undefined) {
         const deviceId =
-          roomToDeviceMap[message.room] || `esp_${message.room}_01`;
+          roomToDeviceMap[sensorMessage.room] || `esp_${sensorMessage.room}_01`;
         const { key, data: sensorData } = processSensorData(
           deviceId,
-          message.sensor,
-          message.value,
-          message.timestamp,
+          sensorMessage.sensor,
+          sensorMessage.value,
+          sensorMessage.timestamp,
         );
 
         console.log(
-          `[WebSocket] Sensor update: ${deviceId} - ${message.sensor} = ${message.value}`,
+          `[WebSocket] Sensor update: ${deviceId} - ${sensorMessage.sensor} = ${sensorMessage.value}`,
         );
+
+        // Register device connection if not already tracked
+        if (sensorMessage.room === "kitchen") {
+          deviceConnections.set("kitchen_fan", ws);
+        }
 
         // Broadcast to all connected clients (including sender)
         broadcast({
           type: "sensor_update",
           key,
           deviceId,
-          sensorType: message.sensor,
+          sensorType: sensorMessage.sensor,
           data: sensorData,
           timestamp: new Date().toISOString(),
         });
@@ -237,6 +337,14 @@ wss.on("connection", (ws: WebSocket, req) => {
   ws.on("close", () => {
     console.log(`[WebSocket] Client disconnected from ${clientIp}`);
     clients.delete(ws);
+
+    // Remove device connections
+    for (const [device, connection] of deviceConnections.entries()) {
+      if (connection === ws) {
+        deviceConnections.delete(device);
+        console.log(`[WebSocket] Device disconnected: ${device}`);
+      }
+    }
 
     // Broadcast client count
     broadcast({

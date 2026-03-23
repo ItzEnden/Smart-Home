@@ -122,23 +122,38 @@ export default function KitchenPage() {
         <section className="bg-white/5 backdrop-blur-xl border border-white/10 rounded-3xl p-5 shadow-xl shadow-black/40">
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-lg font-semibold">Вентиляция</h3>
-            <div className={`flex items-center gap-2 px-3 py-1.5 rounded-lg ${fanAuto ? "bg-blue-500/20" : "bg-amber-500/20"}`}>
+            <button
+              onClick={() => {
+                if (!fanAuto) {
+                  setFanAuto(true);
+                  fanState.setOff();
+                }
+              }}
+              disabled={fanAuto}
+              className={`flex items-center gap-2 px-3 py-1.5 rounded-lg transition-all ${
+                fanAuto
+                  ? "bg-blue-500/20 cursor-default"
+                  : "bg-amber-500/20 hover:bg-amber-500/30 cursor-pointer"
+              }`}
+            >
               <div className={`w-2 h-2 rounded-full ${fanAuto ? "bg-blue-400" : "bg-amber-400"}`} />
               <span className={`text-xs font-medium ${fanAuto ? "text-blue-400" : "text-amber-400"}`}>
                 {fanAuto ? "Авто" : "Ручно"}
               </span>
-            </div>
+              {!fanAuto && (
+                <span className="text-xs text-gray-500">← авто</span>
+              )}
+            </button>
           </div>
 
           <button
             onClick={() => {
               console.log(`[KitchenPage] Button clicked: fanAuto=${fanAuto}, fanState.state=${fanState.state}, fanIsOn=${fanIsOn}`);
               if (fanAuto) {
-                // AUTO mode: switch to MANUAL
-                console.log(`[KitchenPage] Switching from AUTO to MANUAL`);
+                // AUTO mode: switch to MANUAL and turn fan ON
+                console.log(`[KitchenPage] Switching from AUTO to MANUAL and turning ON`);
                 setFanAuto(false);
-                // Note: if fan was OFF in auto, it stays OFF. User clicks again to turn ON.
-                // This is intentional - keeps behavior predictable.
+                fanState.setOn();
               } else {
                 // MANUAL mode: toggle fan
                 console.log(`[KitchenPage] Calling fanState.toggle()...`);

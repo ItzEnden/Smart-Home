@@ -427,6 +427,7 @@ export function useDeviceState(deviceId: string) {
   const [connected, setConnected] = useState(false);
   const deviceIdRef = useRef(deviceId);
   const stateRef = useRef(state);
+  const commandIdRef = useRef(0); // Track command order to ignore stale responses
 
   // Keep refs in sync
   useEffect(() => {
@@ -457,6 +458,12 @@ export function useDeviceState(deviceId: string) {
           matches: message.device === deviceIdRef.current
         });
         if (message.device === deviceIdRef.current) {
+          // Ignore stale responses - if our optimistic state already differs, we have a newer command pending
+          const currentState = stateRef.current;
+          if (currentState !== null && currentState !== message.stateValue) {
+            console.log(`[Client] ⚠ Ignoring stale response: got ${message.stateValue}, but current optimistic state is ${currentState}`);
+            return;
+          }
           console.log(`[Client] ✓ MATCH! Updating state for ${deviceIdRef.current}:`, message.stateValue);
           setState(message.stateValue || null);
           setLoading(false);
@@ -489,6 +496,9 @@ export function useDeviceState(deviceId: string) {
     const currentState = stateRef.current ?? "off";
     const newState = currentState === "on" ? "off" : "on";
     console.log(`[Client] Toggle called: deviceId=${deviceIdRef.current}, currentState=${currentState}, newState=${newState}, isOn=${state === "on"}`);
+    // Optimistic update - immediately update both ref and React state
+    stateRef.current = newState;
+    setState(newState);
     wsManager.send({
       type: "device_command",
       device: deviceIdRef.current,
@@ -500,6 +510,9 @@ export function useDeviceState(deviceId: string) {
 
   const setOn = useCallback(() => {
     console.log(`[Client] Set ON for ${deviceIdRef.current}`);
+    // Optimistic update - both ref and React state
+    stateRef.current = "on";
+    setState("on");
     wsManager.send({
       type: "device_command",
       device: deviceIdRef.current,
@@ -510,6 +523,9 @@ export function useDeviceState(deviceId: string) {
 
   const setOff = useCallback(() => {
     console.log(`[Client] Set OFF for ${deviceIdRef.current}`);
+    // Optimistic update - both ref and React state
+    stateRef.current = "off";
+    setState("off");
     wsManager.send({
       type: "device_command",
       device: deviceIdRef.current,

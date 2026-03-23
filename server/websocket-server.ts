@@ -29,7 +29,7 @@ interface DeviceState {
   type: "device_state";
   device: string;
   parameter: string;
-  value: string;
+  stateValue: string;
   timestamp: string;
 }
 
@@ -145,7 +145,7 @@ function sendInitialData(ws: WebSocket) {
       type: "device_state",
       device: device,
       parameter: "state",
-      value: stateValue,
+      stateValue: stateValue,
       timestamp: new Date().toISOString(),
     };
     ws.send(JSON.stringify(deviceState));
@@ -245,7 +245,7 @@ wss.on("connection", (ws: WebSocket, req) => {
           type: "device_state",
           device: command.device,
           parameter: command.action,
-          value: stateValue,
+          stateValue: stateValue,
           timestamp: new Date().toISOString(),
         };
 

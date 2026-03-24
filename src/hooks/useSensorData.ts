@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useState, useCallback, useRef } from "react";
-import { SensorData } from "@/lib/sensor-store";
+import { SensorData, getGasStatus } from "@/lib/sensor-store";
 
 interface UseSensorDataResult {
   data: SensorData | null;
@@ -252,9 +252,8 @@ export function useGasSensor(deviceId: string) {
     }
   }
 
-  const isSafe = gasValue < 400;
-  const status =
-    gasValue < 360 ? "safe" : gasValue < 400 ? "warning" : "danger";
+  const status = getGasStatus(gasValue);
+  const isSafe = status === "safe";
 
   return {
     value: gasValue,

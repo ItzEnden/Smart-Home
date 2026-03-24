@@ -1,5 +1,5 @@
 "use client";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { PageTransition } from "@/components/PageTransition";
 import { TopBar } from "@/components/TopBar";
 import { Wind, CheckCircle2, AlertTriangle } from "lucide-react";
@@ -15,9 +15,48 @@ export default function KitchenPage() {
   const [fanAuto, setFanAuto] = useState(true);
   const [simulateLeak, setSimulateLeak] = useState(false);
 
+  // Use refs to avoid stale closures in effect
+  const isSafeRef = useRef(isSafe);
+  const hasDataRef = useRef(hasData);
+  const fanAutoRef = useRef(fanAuto);
+  const simulateLeakRef = useRef(simulateLeak);
+  const fanIsOnRef = useRef(fanState.isOn);
+
+  useEffect(() => {
+    isSafeRef.current = isSafe;
+    hasDataRef.current = hasData;
+    fanAutoRef.current = fanAuto;
+    simulateLeakRef.current = simulateLeak;
+    fanIsOnRef.current = fanState.isOn;
+  });
+
   // Determine if fan should be on based on gas levels and manual/auto mode
   const fanShouldBeOn = !isSafe || simulateLeak || (!fanAuto && fanState.isOn);
   const fanIsOn = fanState.isOn || (!isSafe || simulateLeak);
+
+  // Auto mode: turn fan on when gas level is unsafe, off when safe
+  useEffect(() => {
+    const auto = fanAutoRef.current;
+    const data = hasDataRef.current;
+    const safe = isSafeRef.current;
+    const leak = simulateLeakRef.current;
+    const on = fanIsOnRef.current;
+
+    console.log(`[Kitchen] Auto effect: auto=${auto}, hasData=${data}, isSafe=${safe}, simulateLeak=${leak}, isOn=${on}, gas=${value}`);
+
+    if (!auto || !data) return;
+
+    const shouldBeOn = !safe || leak;
+    console.log(`[Kitchen] shouldBeOn=${shouldBeOn}, currentIsOn=${on}`);
+
+    if (shouldBeOn && !on) {
+      console.log(`[Kitchen] Auto mode: turning fan ON`);
+      fanState.setOn();
+    } else if (!shouldBeOn && on) {
+      console.log(`[Kitchen] Auto mode: turning fan OFF`);
+      fanState.setOff();
+    }
+  }, [isSafe, hasData, fanAuto, simulateLeak, fanState.isOn, value]);
 
   // Debug logging
   console.log(`[Kitchen] Render: fanState.state=${fanState.state}, fanState.isOn=${fanState.isOn}, fanIsOn=${fanIsOn}, fanAuto=${fanAuto}`);

@@ -172,14 +172,13 @@ export const roomToDeviceMap: Record<string, string> = {
   street: "esp_street_01",
 };
 
-// Gas sensor helpers
-export function isGasLevelSafe(value: number, threshold = 500): boolean {
-  return value < threshold;
-}
+// Gas sensor thresholds (ppm)
+export const GAS_THRESHOLD_SAFE = 200;
+export const GAS_THRESHOLD_WARNING = 300;
 
 export function getGasStatus(value: number): "safe" | "warning" | "danger" {
-  if (value < 300) return "safe";
-  if (value < 700) return "warning";
+  if (value < GAS_THRESHOLD_SAFE) return "safe";
+  if (value < GAS_THRESHOLD_WARNING) return "warning";
   return "danger";
 }
 

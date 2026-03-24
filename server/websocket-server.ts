@@ -315,6 +315,8 @@ wss.on("connection", (ws: WebSocket, req) => {
             timestamp: new Date().toISOString(),
           }),
         );
+      }
+      
       // Handle video frames from CV client
       if (message.type === "video_frame") {
         broadcast({

@@ -1,5 +1,7 @@
 import { WebSocketServer, WebSocket } from "ws";
 import http from "http";
+import { eventStore } from "../src/lib/event-store";
+import { getGasStatus, GAS_THRESHOLD_WARNING } from "../src/lib/sensor-store";
 
 // Types
 interface SensorData {
@@ -241,6 +243,16 @@ wss.on("connection", (ws: WebSocket, req) => {
         deviceStates.set(command.device, stateValue);
         console.log(`[WebSocket] Stored device state: ${command.device}=${stateValue}`);
 
+        // Log device event
+        const roomMap: Record<string, string> = {
+          kitchen_fan: "Кухня",
+          valve: "Ванная",
+          hall_light: "Прихожая",
+          office_light: "Кабинет",
+          humidifier: "Кабинет",
+        };
+        eventStore.addDeviceEvent(command.device, stateValue === "on" ? "включён" : "выключен", roomMap[command.device] || "Система");
+
         const deviceState: DeviceState = {
           type: "device_state",
           device: command.device,
@@ -312,6 +324,28 @@ wss.on("connection", (ws: WebSocket, req) => {
           data: sensorData,
           timestamp: new Date().toISOString(),
         });
+
+        // Log event to Event Store
+        let eventType: "info" | "warning" | "alert" = "info";
+        if (sensorMessage.sensor === "gas") {
+          const gasValue = typeof sensorMessage.value === "number" ? sensorMessage.value : parseFloat(String(sensorMessage.value));
+          const gasStatus = getGasStatus(gasValue);
+          if (gasStatus === "danger") eventType = "alert";
+          else if (gasStatus === "warning") eventType = "warning";
+        } else if (sensorMessage.sensor === "water_leak" && sensorMessage.value === "detected") {
+          eventType = "alert";
+        } else if (sensorMessage.sensor === "motion" && sensorMessage.value === "detected") {
+          eventType = "info";
+        }
+
+        eventStore.addSensorEvent(
+          sensorMessage.room,
+          sensorMessage.sensor,
+          typeof sensorMessage.value === "boolean"
+            ? sensorMessage.value ? "detected" : "clear"
+            : sensorMessage.value,
+          eventType
+        );
 
         // Send acknowledgment to sender
         ws.send(

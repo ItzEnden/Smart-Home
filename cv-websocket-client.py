@@ -5,6 +5,7 @@ import sys
 import json
 import asyncio
 import websockets
+import base64
 from datetime import datetime
 from ultralytics import YOLO
 
@@ -95,7 +96,7 @@ async def reconnect_with_backoff(url, max_attempts=10):
 
 async def main():
     """Main async loop for WebSocket and camera processing"""
-    global current_faces
+    global current_faces, count
 
     ws = await reconnect_with_backoff(WS_URL)
     if not ws:
@@ -156,7 +157,21 @@ async def main():
             cv2.putText(frame, name, (left + 5, bottom + 18), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
 
         count += 1
-        cv2.imshow("Guard System", frame)
+
+        # Send video frame every 3rd frame (~10 FPS)
+        if count % 3 == 0:
+            try:
+                _, buffer = cv2.imencode('.jpg', frame, [cv2.IMWRITE_JPEG_QUALITY, 70])
+                frame_base64 = base64.b64encode(buffer).decode('utf-8')
+                video_message = {
+                    "type": "video_frame",
+                    "room": ROOM,
+                    "data": frame_base64,
+                    "timestamp": int(datetime.now().timestamp() * 1000)
+                }
+                await ws.send(json.dumps(video_message))
+            except Exception as e:
+                print(f"[WebSocket] Error sending video frame: {e}")
 
         # Check for face changes and send WebSocket message
         if current_faces:
@@ -172,16 +187,16 @@ async def main():
             await send_face_event(ws, "Searching...")
             last_detected_name = None
 
-        if cv2.waitKey(1) & 0xFF == ord('q'):
-            break
-
     cap.release()
-    cv2.destroyAllWindows()
 
 if __name__ == "__main__":
     try:
         asyncio.run(main())
     except KeyboardInterrupt:
         print("\n[Shutdown] Stopping...")
+    except Exception as e:
+        print(f"\n[ERROR] Unexpected error: {e}")
+        import traceback
+        traceback.print_exc()
+    finally:
         cap.release()
-        cv2.destroyAllWindows()

@@ -5,17 +5,6 @@ import { PageTransition } from "@/components/PageTransition";
 import { Search, Filter, Calendar, User, UserX } from "lucide-react";
 import { wsManager } from "@/hooks/useSensorData";
 
-interface WebSocketMessage {
-  type: "initial" | "sensor_update" | "client_count" | "error" | "ack";
-  key?: string;
-  deviceId?: string;
-  sensorType?: string;
-  data?: any;
-  timestamp: string;
-  clientCount?: number;
-  message?: string;
-}
-
 interface LogEvent {
   id: number;
   time: string;
@@ -55,7 +44,7 @@ export default function EventsPage() {
 
   // Handle WebSocket messages for real-time face recognition events
   useEffect(() => {
-    const handleMessage = (message: WebSocketMessage) => {
+    const handleMessage = (message: any) => {
       if (message.type === "sensor_update" && message.data) {
         const { sensorType, data } = message;
 

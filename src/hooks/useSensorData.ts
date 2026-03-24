@@ -11,11 +11,12 @@ interface UseSensorDataResult {
 }
 
 interface WebSocketMessage {
-  type: "initial" | "sensor_update" | "client_count" | "error" | "ack" | "robot_update" | "device_state";
+  type: "initial" | "sensor_update" | "client_count" | "error" | "ack" | "robot_update" | "device_state" | "video_frame";
   key?: string;
   deviceId?: string;
   sensorType?: string;
-  data?: SensorData | Record<string, SensorData> | RobotData;
+  room?: string;
+  data?: SensorData | Record<string, SensorData> | RobotData | string;
   timestamp: string;
   clientCount?: number;
   message?: string;

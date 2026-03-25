@@ -2,6 +2,7 @@ import { WebSocketServer, WebSocket } from "ws";
 import http from "http";
 import { eventStore } from "../src/lib/event-store";
 import { getGasStatus, GAS_THRESHOLD_WARNING } from "../src/lib/sensor-store";
+import { sendAlert } from "../src/lib/telegram";
 
 // Types
 interface SensorData {
@@ -69,6 +70,7 @@ const clients = new Set<WebSocket>();
 const MAX_HISTORY_LENGTH = 100;
 const deviceConnections = new Map<string, WebSocket>();
 const deviceStates = new Map<string, string>(); // Store device states: "on" | "off"
+const settingsStore = new Map<string, Record<string, unknown>>(); // Store synced settings
 
 // Room to device mapping
 const roomToDeviceMap: Record<string, string> = {
@@ -317,6 +319,31 @@ wss.on("connection", (ws: WebSocket, req) => {
         );
       }
       
+      // Handle settings sync from client
+      if (message.type === "settings_sync") {
+        const { device, settings } = message as { type: string; device: string; settings: Record<string, unknown> };
+        console.log(`[WebSocket] Settings sync: device=${device}, settings=${JSON.stringify(settings)}`);
+
+        // Persist settings in memory
+        settingsStore.set(device, { ...(settingsStore.get(device) || {}), ...settings });
+
+        // Forward to ESP device if connected
+        const espConnection = deviceConnections.get(`esp_${device}_01`) || deviceConnections.get(device);
+        if (espConnection && espConnection.readyState === WebSocket.OPEN) {
+          espConnection.send(JSON.stringify({ device: "climate", ...settings }));
+          console.log(`[WebSocket] Settings forwarded to ESP ${device}`);
+        }
+
+        // Broadcast acknowledgment to all clients
+        broadcast({
+          type: "settings_ack",
+          device,
+          data: settings as unknown as Record<string, SensorData>,
+          timestamp: new Date().toISOString(),
+        } as unknown as BroadcastMessage);
+        return;
+      }
+
       // Handle video frames from CV client
       if (message.type === "video_frame") {
         broadcast({
@@ -378,10 +405,13 @@ wss.on("connection", (ws: WebSocket, req) => {
         if (sensorMessage.sensor === "gas") {
           const gasValue = typeof sensorMessage.value === "number" ? sensorMessage.value : parseFloat(String(sensorMessage.value));
           const gasStatus = getGasStatus(gasValue);
-          if (gasStatus === "danger") eventType = "alert";
-          else if (gasStatus === "warning") eventType = "warning";
+          if (gasStatus === "danger") {
+            eventType = "alert";
+            sendAlert("gas", `Уровень: ${sensorMessage.value} ppm`);
+          } else if (gasStatus === "warning") eventType = "warning";
         } else if (sensorMessage.sensor === "water_leak" && sensorMessage.value === "detected") {
           eventType = "alert";
+          sendAlert("water_leak");
         } else if (sensorMessage.sensor === "motion" && sensorMessage.value === "detected") {
           eventType = "info";
         }

@@ -89,9 +89,18 @@ export default function KitchenPage() {
     return "bg-red-500/20 border-red-500";
   };
 
-  // Mock history data
-  const getHistoryData = () => {
-    return [40, 45, 42, 50, 48, 45, 43, 40, 42, 45, 48, 50, 45, 42, 40];
+  // Build chart data from real sensor history (last 15 readings)
+  const { history } = useGasSensor(GAS_DEVICE_ID);
+  const getHistoryData = (): number[] => {
+    if (history.length === 0) return [40, 45, 42, 50, 48, 45, 43, 40, 42, 45, 48, 50, 45, 42, 40];
+    const recent = history.slice(0, 15).reverse();
+    const values = recent.map((h) => {
+      const v = typeof h.value === "string" ? parseFloat(h.value) : Number(h.value);
+      return isNaN(v) ? 0 : v;
+    });
+    const maxVal = Math.max(...values, 1);
+    // Scale to percentage height (5% min so bars are always visible)
+    return values.map((v) => Math.max(5, Math.round((v / maxVal) * 95)));
   };
 
   return (
@@ -133,9 +142,10 @@ export default function KitchenPage() {
 
           <div className="flex items-end gap-1 h-32">
             {getHistoryData().map((h: number, i: number) => {
+              // Color based on percentage (green < 40%, yellow 40–70%, red > 70%)
               let barColor = "bg-green-400";
               if (h > 70) barColor = "bg-red-400";
-              else if (h > 50) barColor = "bg-yellow-400";
+              else if (h > 40) barColor = "bg-yellow-400";
 
               return (
                 <div

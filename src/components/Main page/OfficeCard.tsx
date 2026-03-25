@@ -2,6 +2,9 @@
 import Link from "next/link";
 import { useState } from "react";
 import { ChevronRight, Thermometer, Droplet, Flame } from "lucide-react";
+import { useSensorData } from "@/hooks/useSensorData";
+
+const OFFICE_DEVICE_ID = "esp_office_01";
 
 type OfficeMode = "focus" | "rest" | "manual" | "off";
 
@@ -47,9 +50,18 @@ export function OfficeCard() {
     }
   };
 
-  // Mock data - will be replaced with real WebSocket data
-  const currentTemp = 22;
-  const currentHumidity = 45;
+  const tempData = useSensorData(OFFICE_DEVICE_ID, "temperature");
+  const humData = useSensorData(OFFICE_DEVICE_ID, "humidity");
+
+  const parseSensorValue = (val: number | boolean | string | undefined): number => {
+    if (val === undefined || val === null) return 0;
+    if (typeof val === "number") return val;
+    const n = parseFloat(String(val));
+    return isNaN(n) ? 0 : n;
+  };
+
+  const currentTemp = parseSensorValue(tempData.data?.value) || 22;
+  const currentHumidity = parseSensorValue(humData.data?.value) || 45;
   const windowOpen = false;
   const humidifierOn = false;
 
@@ -143,11 +155,15 @@ export function OfficeCard() {
                 <div className="grid grid-cols-2 gap-3 mb-3">
                   <div className="flex items-center gap-2">
                     <Thermometer className="w-4 h-4 text-orange-400" />
-                    <span className="text-sm text-white">{currentTemp}°C</span>
+                    <span className="text-sm text-white">
+                      {tempData.loading ? "..." : `${currentTemp.toFixed(1)}°C`}
+                    </span>
                   </div>
                   <div className="flex items-center gap-2">
                     <Droplet className="w-4 h-4 text-cyan-400" />
-                    <span className="text-sm text-white">{currentHumidity}%</span>
+                    <span className="text-sm text-white">
+                      {humData.loading ? "..." : `${currentHumidity.toFixed(0)}%`}
+                    </span>
                   </div>
                 </div>
                 <div className="grid grid-cols-2 gap-2 text-xs">

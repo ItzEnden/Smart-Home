@@ -4,6 +4,7 @@ import { PageTransition } from "@/components/PageTransition";
 import { TopBar } from "@/components/TopBar";
 import { Brain, Coffee, Settings2, Power, Thermometer, Droplet } from "lucide-react";
 import { useSensorData } from "@/hooks/useSensorData";
+import { useAmbientSound } from "@/hooks/useAmbientSound";
 
 const OFFICE_DEVICE_ID = "esp_office_01";
 
@@ -15,6 +16,7 @@ export default function OfficePage() {
   // Real sensor data from WebSocket
   const tempData = useSensorData(OFFICE_DEVICE_ID, "temperature");
   const humData = useSensorData(OFFICE_DEVICE_ID, "humidity");
+  const { playModeSound } = useAmbientSound();
 
   // Parse sensor values (handle string/number types)
   const parseSensorValue = (value: number | boolean | string | undefined): number => {
@@ -44,9 +46,7 @@ export default function OfficePage() {
 
   const handleModeChange = (newMode: EnvironmentMode) => {
     setMode(newMode);
-    if (newMode === "focus" || newMode === "rest") {
-      console.log(`Mode changed to ${newMode}`);
-    }
+    playModeSound(newMode);
   };
 
   const getModeColor = (currentMode: EnvironmentMode) => {

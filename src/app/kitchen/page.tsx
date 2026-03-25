@@ -9,7 +9,7 @@ const GAS_DEVICE_ID = "esp_kitchen_01";
 const FAN_DEVICE_ID = "kitchen_fan";
 
 export default function KitchenPage() {
-  const { value, isSafe, status, loading, hasData } = useGasSensor(GAS_DEVICE_ID);
+  const { value, isSafe, status, loading, hasData, history } = useGasSensor(GAS_DEVICE_ID);
   const fanState = useDeviceState(FAN_DEVICE_ID);
 
   const [fanAuto, setFanAuto] = useState(true);
@@ -30,9 +30,7 @@ export default function KitchenPage() {
     fanIsOnRef.current = fanState.isOn;
   });
 
-  // Determine if fan should be on based on gas levels and manual/auto mode
-  const fanShouldBeOn = !isSafe || simulateLeak || (!fanAuto && fanState.isOn);
-  const fanIsOn = fanState.isOn || (!isSafe || simulateLeak);
+  const fanIsOn = fanState.isOn;
 
   // Auto mode: turn fan on when gas level is unsafe, off when safe
   useEffect(() => {
@@ -90,7 +88,6 @@ export default function KitchenPage() {
   };
 
   // Build chart data from real sensor history (last 15 readings)
-  const { history } = useGasSensor(GAS_DEVICE_ID);
   const getHistoryData = (): number[] => {
     if (history.length === 0) return [40, 45, 42, 50, 48, 45, 43, 40, 42, 45, 48, 50, 45, 42, 40];
     const recent = history.slice(0, 15).reverse();
@@ -209,12 +206,11 @@ export default function KitchenPage() {
                 fanState.toggle();
               }
             }}
-            disabled={!isSafe && !simulateLeak}
             className={`w-full p-4 rounded-2xl flex items-center justify-center gap-4 transition-all ${
               fanIsOn
                 ? "bg-green-500/20 border border-green-500 text-green-400"
                 : "bg-black/40 border border-white/5 text-gray-400 hover:bg-white/10"
-            } ${!isSafe && !simulateLeak ? "opacity-50" : ""}`}
+            }`}
           >
             <div className={`w-12 h-12 rounded-xl flex items-center justify-center ${fanIsOn ? "bg-green-500/20" : "bg-gray-700"}`}>
               <Wind className={`w-6 h-6 ${fanIsOn && !isSafe ? "animate-spin" : ""}`} />

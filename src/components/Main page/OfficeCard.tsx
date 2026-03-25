@@ -3,6 +3,7 @@ import Link from "next/link";
 import { useState } from "react";
 import { ChevronRight, Thermometer, Droplet, Flame } from "lucide-react";
 import { useSensorData } from "@/hooks/useSensorData";
+import { useAmbientSound } from "@/hooks/useAmbientSound";
 
 const OFFICE_DEVICE_ID = "esp_office_01";
 
@@ -50,6 +51,7 @@ export function OfficeCard() {
     }
   };
 
+  const { playModeSound } = useAmbientSound();
   const tempData = useSensorData(OFFICE_DEVICE_ID, "temperature");
   const humData = useSensorData(OFFICE_DEVICE_ID, "humidity");
 
@@ -87,6 +89,7 @@ export function OfficeCard() {
                   onClick={(e) => {
                     e.preventDefault();
                     setMode(m as OfficeMode);
+                    playModeSound(m as OfficeMode);
                   }}
                   className={`p-2.5 rounded-xl transition-all border ${
                     mode === m

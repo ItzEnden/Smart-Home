@@ -8,6 +8,7 @@ export interface FaceProfile {
   name: string;
   role: FaceRole;
   addedDate: string; // "DD.MM.YYYY"
+  imageFile?: string; // filename in faces/ directory
 }
 
 const DATA_DIR = path.join(process.cwd(), "data");

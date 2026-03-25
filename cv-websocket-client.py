@@ -23,22 +23,33 @@ last_sent_name = None
 last_sent_time = 0
 MIN_SEND_INTERVAL = 2  # Minimum seconds between same-name messages
 
-# Load face encodings
+# Face database state
 known_encodings = []
 known_names = []
+
+def load_faces():
+    """Load (or reload) face encodings from faces directory"""
+    global known_encodings, known_names
+
+    if not os.path.exists(FACES_DIR):
+        os.makedirs(FACES_DIR)
+
+    loaded_encodings = []
+    loaded_names = []
+    for file in os.listdir(FACES_DIR):
+        if file.endswith(('.jpg', '.png', '.jpeg')):
+            img = face_recognition.load_image_file(f"{FACES_DIR}/{file}")
+            encs = face_recognition.face_encodings(img)
+            if encs:
+                loaded_encodings.append(encs[0])
+                loaded_names.append(os.path.splitext(file)[0].capitalize())
+
+    known_encodings = loaded_encodings
+    known_names = loaded_names
+    print(f"[FaceDB] Loaded. Database contains: {known_names}")
+
 print("Loading face database...")
-
-if not os.path.exists(FACES_DIR):
-    os.makedirs(FACES_DIR)
-
-for file in os.listdir(FACES_DIR):
-    if file.endswith(('.jpg', '.png', '.jpeg')):
-        img = face_recognition.load_image_file(f"{FACES_DIR}/{file}")
-        encs = face_recognition.face_encodings(img)
-        if encs:
-            known_encodings.append(encs[0])
-            known_names.append(os.path.splitext(file)[0].capitalize())
-
+load_faces()
 print(f"Ready! Database contains: {known_names}")
 
 # Initialize YOLO and camera
@@ -78,6 +89,23 @@ async def send_face_event(websocket, name):
     except Exception as e:
         print(f"[WebSocket] Error sending message: {e}")
 
+async def listen_for_commands(ws):
+    """Listen for incoming server commands (e.g. reload_faces)"""
+    try:
+        async for raw in ws:
+            try:
+                msg = json.loads(raw)
+            except json.JSONDecodeError:
+                continue
+            if msg.get("type") == "reload_faces":
+                print("[FaceDB] Reload command received, reloading...", flush=True)
+                try:
+                    load_faces()
+                except Exception as e:
+                    print(f"[FaceDB] Reload error: {e}", flush=True)
+    except Exception as e:
+        print(f"[WebSocket] Listener stopped: {e}", flush=True)
+
 async def reconnect_with_backoff(url, max_attempts=10):
     """Reconnect with exponential backoff"""
     for attempt in range(1, max_attempts + 1):
@@ -103,6 +131,7 @@ async def main():
         print("[ERROR] Could not connect to WebSocket server")
         return
 
+    listener_task = asyncio.create_task(listen_for_commands(ws))
     last_detected_name = None
 
     while cap.isOpened():
@@ -188,6 +217,7 @@ async def main():
             last_detected_name = None
 
     cap.release()
+    listener_task.cancel()
 
 if __name__ == "__main__":
     try:

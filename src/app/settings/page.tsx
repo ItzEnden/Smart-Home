@@ -69,12 +69,16 @@ export default function SettingsPage() {
     await fetch(`/api/faces?id=${id}`, { method: "DELETE" }).catch(() => {});
   };
 
-  const addProfile = async () => {
+  const addProfile = async (file: File) => {
     if (faceProfiles.length >= 10) return;
+    const name = file.name.replace(/\.[^.]+$/, "");
+    const formData = new FormData();
+    formData.append("file", file);
+    formData.append("name", name);
+    formData.append("role", "guest");
     const res = await fetch("/api/faces", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name: "Новый профиль", role: "guest" }),
+      body: formData,
     }).catch(() => null);
     if (res?.ok) {
       const profile = await res.json();
@@ -151,7 +155,7 @@ export default function SettingsPage() {
               onChange={(e) => {
                 const file = e.target.files?.[0];
                 if (file && faceProfiles.length < 10) {
-                  addProfile();
+                  addProfile(file);
                 }
               }}
               disabled={faceProfiles.length >= 10}

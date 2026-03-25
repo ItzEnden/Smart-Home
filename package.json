@@ -9,9 +9,9 @@
     "lint": "eslint .",
     "clean": "next clean",
     "ws-server": "npx tsx server/websocket-server.ts",
-    "cv-client": "conda run -n guard python cv-websocket-client.py",
+    "cv-client": "/opt/homebrew/Caskroom/miniconda/base/envs/guard/bin/python -u cv-websocket-client.py",
     "dev:all": "concurrently \"npm run dev\" \"npm run ws-server\"",
-    "dev:all:cv": "concurrently \"npm run dev\" \"npm run ws-server\" \"npm run cv-client\"",
+    "dev:all:cv": "concurrently \"npm run dev\" \"npm run ws-server\" \"/opt/homebrew/Caskroom/miniconda/base/envs/guard/bin/python -u cv-websocket-client.py\"",
     "test:ws": "node scripts/test-websocket-client.js"
   },
   "dependencies": {

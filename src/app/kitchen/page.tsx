@@ -184,7 +184,7 @@ export default function KitchenPage() {
             >
               <div className={`w-2 h-2 rounded-full ${fanAuto ? "bg-blue-400" : "bg-amber-400"}`} />
               <span className={`text-xs font-medium ${fanAuto ? "text-blue-400" : "text-amber-400"}`}>
-                {fanAuto ? "Авто" : "Ручно"}
+                {fanAuto ? "Авто" : "Ручное"}
               </span>
               {!fanAuto && (
                 <span className="text-xs text-gray-500">← авто</span>

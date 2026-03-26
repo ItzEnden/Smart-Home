@@ -12,7 +12,8 @@
     "cv-client": "/opt/homebrew/Caskroom/miniconda/base/envs/guard/bin/python -u cv-websocket-client.py",
     "dev:all": "concurrently \"npm run dev\" \"npm run ws-server\"",
     "dev:all:cv": "concurrently \"npm run dev\" \"npm run ws-server\" \"/opt/homebrew/Caskroom/miniconda/base/envs/guard/bin/python -u cv-websocket-client.py\"",
-    "test:ws": "node scripts/test-websocket-client.js"
+    "test:ws": "node scripts/test-websocket-client.js",
+    "test:rgb": "node scripts/test-rgb-strip.js"
   },
   "dependencies": {
     "@google/genai": "^1.17.0",

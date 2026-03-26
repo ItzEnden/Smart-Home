@@ -87,6 +87,12 @@ npm run dev:all
 
 Runs both Next.js (port 3000) and WebSocket server (port 3001).
 
+```bash
+npm run dev:all:cv
+```
+
+Same as above **plus** the CV client (camera + face recognition). Requires conda env `guard` with `face_recognition`, `ultralytics`, `opencv-python`, `websockets` installed. The Python binary is called directly — no `conda run` wrapper — to keep stdout visible in `concurrently`.
+
 ### Production
 
 ```bash
@@ -148,6 +154,59 @@ Pin: `GPIO12 / D6`. Relay module uses **open-collector** input — ESP can't sou
 | `INPUT` | float (high-Z) | OFF | **ВЫКЛ** |
 
 At boot: `pinMode(INPUT)` — fan stays OFF. Never use `digitalWrite` on this pin.
+
+### WebSocket Callback Constraints (ESP8266)
+
+**Never call `webSocket.sendTXT()` from within the `WStype_CONNECTED` callback.**
+
+The `WebSocketsClient` library fires `WStype_CONNECTED` from inside `webSocket.loop()`, which still holds the TCP send buffer. Calling `sendTXT()` there corrupts internal state → connection drops within milliseconds → 5-second reconnect loop.
+
+**Correct pattern — deferred flag:**
+```cpp
+bool pendingInitialState = false;
+
+void webSocketEvent(WStype_t type, ...) {
+  case WStype_CONNECTED:
+    pendingInitialState = true;   // ← set flag only
+    break;
+}
+
+void loop() {
+  webSocket.loop();
+  if (pendingInitialState) {      // ← send safely after loop() returns
+    pendingInitialState = false;
+    sendInitialState();
+  }
+}
+```
+
+**Symptom of the bug:** Serial shows `WS connected` immediately followed by `WS disconnected` with no error, cycling every ~5 seconds. No `device_command` messages ever reach handlers.
+
+### RGB Strip (WS2812B) — WiFi Interference Fix
+
+FastLED uses bit-banging on ESP8266 — WiFi interrupts during `FastLED.show()` corrupt the signal and only the first LED updates correctly.
+
+**Fix:** define before the include — already applied in firmware:
+```cpp
+#define FASTLED_ALLOW_INTERRUPTS 0
+#include <FastLED.h>
+```
+
+**Always yield before and after `show()`** to let WiFi finish pending operations:
+```cpp
+yield();
+FastLED.show();
+yield();
+```
+
+**Diagnostic self-test pattern** — put in `setup()` before `connectToWiFi()` to confirm hardware is OK independently of WiFi:
+```cpp
+fill_solid(officeLeds, NUM_OFFICE_LEDS, CRGB(255, 0, 0));
+FastLED.show();
+delay(500);            // all 30 LEDs should be red; if only LED[0] → wiring/power issue
+FastLED.clear();
+FastLED.show();
+```
 
 ### Room to Device Mapping
 
@@ -284,6 +343,50 @@ node scripts/test-websocket-client.js ws://192.168.1.100:3001 --infinite
 | `WS_HOST` | WebSocket server host | `0.0.0.0` | No |
 | `SENSOR_API_KEY` | API key for ESP authentication | — | No |
 | `NEXT_PUBLIC_WS_URL` | WebSocket URL for client | `ws://localhost:3001` | No |
+
+## CV Client (`cv-websocket-client.py`)
+
+Python script that reads from a webcam, runs YOLO person detection + face recognition, and streams annotated frames to the WS server.
+
+### Python Environment
+
+Uses conda env `guard`. The package.json `cv-client` script calls the binary directly:
+```
+/opt/homebrew/Caskroom/miniconda/base/envs/guard/bin/python -u cv-websocket-client.py
+```
+
+The `-u` flag disables Python's stdout buffering so `print()` output appears in `concurrently` in real time. **Do not replace with `conda run`** — it captures subprocess stdout regardless of flags.
+
+### How it Works
+
+1. At startup: loads face encodings from `faces/` directory into memory
+2. Connects to WS server at `WS_URL` (default `ws://localhost:3001`)
+3. Starts `listen_for_commands(ws)` as a background asyncio task
+4. Main loop: reads frames → YOLO detect persons → face_recognition per person → annotate frame → `ws.send(video_frame)`
+5. At the end of every loop iteration: `await asyncio.sleep(0)` yields control back to the event loop so `listen_for_commands` can process queued messages
+
+### `reload_faces` Hot-Reload
+
+When a face is added/deleted via `/api/faces`, the server broadcasts `{type: "reload_faces"}` to all clients. The CV client's `listen_for_commands` coroutine receives this and calls `load_faces()` immediately — no restart needed.
+
+**Critical:** the `await asyncio.sleep(0)` at the end of the main loop is what makes this work. Without it, `cap.read()` + YOLO inference block the event loop entirely and `listen_for_commands` never runs.
+
+### WS Message Types (CV Client ↔ Server)
+
+**CV → Server:**
+```json
+{"type": "video_frame", "room": "street", "data": "<base64-jpg>", "timestamp": 123}
+{"room": "street", "sensor": "face_recognition", "value": "Denis", "timestamp": 123}
+```
+
+**Server → CV:**
+```json
+{"type": "reload_faces", "timestamp": "..."}
+{"type": "config", "gas_threshold_safe": 360, "gas_threshold_warning": 400}
+{"type": "initial", "data": {...}}
+```
+
+`video_frame` messages are forwarded by the server to all clients **except the sender** — so the CV client never receives its own frames back.
 
 ## Face Management API
 

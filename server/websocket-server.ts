@@ -145,20 +145,30 @@ function broadcast(message: BroadcastMessage) {
   console.log(`[Broadcast] Sent to ${sentCount} clients:`, message.type);
 }
 
+// Detect if a connecting client is an ESP device (vs browser)
+// Arduino's WebSocketsClient sends "arduino" as User-Agent
+function isEspClient(req: import("http").IncomingMessage): boolean {
+  const ua = (req.headers["user-agent"] || "").toLowerCase();
+  return ua.includes("arduino");
+}
+
 // Send current sensor data to a specific client
-function sendInitialData(ws: WebSocket) {
-  const allData: Record<string, SensorData> = {};
-  sensorDataStore.forEach((data, key) => {
-    allData[key] = data;
-  });
+function sendInitialData(ws: WebSocket, esp: boolean) {
+  // Skip the heavy sensor history dump for ESP clients — they can't handle large payloads
+  if (!esp) {
+    const allData: Record<string, SensorData> = {};
+    sensorDataStore.forEach((data, key) => {
+      allData[key] = data;
+    });
 
-  const message: BroadcastMessage = {
-    type: "initial",
-    data: allData,
-    timestamp: new Date().toISOString(),
-  };
+    const message: BroadcastMessage = {
+      type: "initial",
+      data: allData,
+      timestamp: new Date().toISOString(),
+    };
 
-  ws.send(JSON.stringify(message));
+    ws.send(JSON.stringify(message));
+  }
 
   // Send config (thresholds) — ESP reads this on connect and updates its constants
   ws.send(JSON.stringify({
@@ -222,11 +232,12 @@ const wss = new WebSocketServer({ server });
 
 wss.on("connection", (ws: WebSocket, req) => {
   const clientIp = req.socket.remoteAddress;
-  console.log(`[WebSocket] Client connected from ${clientIp}`);
+  const esp = isEspClient(req);
+  console.log(`[WebSocket] ${esp ? "ESP" : "Browser"} client connected from ${clientIp}`);
   clients.add(ws);
 
-  // Send initial data
-  sendInitialData(ws);
+  // Send initial data (ESP clients skip the heavy sensor history dump)
+  sendInitialData(ws, esp);
 
   // Broadcast client count
   broadcast({
@@ -242,7 +253,8 @@ wss.on("connection", (ws: WebSocket, req) => {
 
       // Register ESP device connection from initial state report (fires before first sensor read)
       if (message.type === "device_state" && message.device && message.api_key !== undefined) {
-        const knownEspDevices = ["kitchen_fan", "valve", "office_light", "humidifier"];
+        const knownEspDevices = ["kitchen_fan", "valve", "office_light", "humidifier",
+                                  "office_humidifier", "window", "hall_light"];
         if (knownEspDevices.includes(message.device as string)) {
           deviceConnections.set(message.device as string, ws);
           console.log(`[WebSocket] ESP device registered via device_state: ${message.device}`);
@@ -260,10 +272,14 @@ wss.on("connection", (ws: WebSocket, req) => {
         // Send command to ESP device if connected
         const espConnection = deviceConnections.get(command.device);
         if (espConnection && espConnection.readyState === WebSocket.OPEN) {
-          // Convert to ESP format: {"device": "fan"/"valve", "state": bool/"open"/"close"}
-          const espDevice = command.device === "kitchen_fan" ? "fan" : command.device;
+          // Convert to ESP format: {"device": "fan"/"valve"/"humidifier"/"window", "state": bool/"open"/"close"}
+          const espDevice = command.device === "kitchen_fan" ? "fan"
+            : command.device === "office_humidifier" ? "humidifier"
+            : command.device;
           const espState = command.device === "valve"
             ? (command.state ? "close" : "open")
+            : command.device === "window"
+            ? (command.state ? "open" : "close")
             : command.state === true;
           const espCommand: Record<string, unknown> = {
             device: espDevice,
@@ -292,7 +308,8 @@ wss.on("connection", (ws: WebSocket, req) => {
           valve: "Ванная",
           hall_light: "Прихожая",
           office_light: "Кабинет",
-          humidifier: "Кабинет",
+          office_humidifier: "Кабинет",
+          window: "Кабинет",
         };
         eventStore.addDeviceEvent(command.device, stateValue === "on" ? "включён" : "выключен", roomMap[command.device] || "Система");
 
@@ -304,13 +321,17 @@ wss.on("connection", (ws: WebSocket, req) => {
           timestamp: new Date().toISOString(),
         };
 
-        console.log(`[WebSocket] Broadcasting device_state:`, {
-          type: deviceState.type,
-          device: deviceState.device,
-          stateValue: stateValue,
-          clientsCount: clients.size
+        // Broadcast device_state to browser clients only — skip ESP connections
+        const espConnections = new Set(deviceConnections.values());
+        const deviceStatePayload = JSON.stringify(deviceState);
+        let sentCount = 0;
+        clients.forEach((client) => {
+          if (!espConnections.has(client) && client.readyState === WebSocket.OPEN) {
+            client.send(deviceStatePayload);
+            sentCount++;
+          }
         });
-        broadcast(deviceState as unknown as BroadcastMessage);
+        console.log(`[WebSocket] device_state sent to ${sentCount} browser clients (skipped ESP):`, deviceState.device, stateValue);
 
         // Send acknowledgment
         ws.send(
@@ -345,6 +366,16 @@ wss.on("connection", (ws: WebSocket, req) => {
         );
       }
       
+      // Handle settings request from ESP on reconnect
+      if (message.type === "request_settings") {
+        const officeSettings = settingsStore.get("office");
+        if (officeSettings && ws.readyState === WebSocket.OPEN) {
+          ws.send(JSON.stringify({ device: "climate", ...officeSettings }));
+          console.log(`[WebSocket] Sent stored settings to ESP: ${JSON.stringify(officeSettings)}`);
+        }
+        return;
+      }
+
       // Handle settings sync from client
       if (message.type === "settings_sync") {
         const { device, settings } = message as { type: string; device: string; settings: Record<string, unknown> };
@@ -358,6 +389,8 @@ wss.on("connection", (ws: WebSocket, req) => {
         if (espConnection && espConnection.readyState === WebSocket.OPEN) {
           espConnection.send(JSON.stringify({ device: "climate", ...settings }));
           console.log(`[WebSocket] Settings forwarded to ESP ${device}`);
+        } else {
+          console.log(`[WebSocket] ⚠ No ESP connection for ${device} (keys: ${[...deviceConnections.keys()].join(', ')})`);
         }
 
         // Broadcast acknowledgment to all clients
@@ -433,6 +466,15 @@ wss.on("connection", (ws: WebSocket, req) => {
         }
         if (sensorMessage.room === "bathroom") {
           deviceConnections.set("valve", ws);        // valve регистрируем и по bathroom-данным
+        }
+        if (sensorMessage.room === "office") {
+          deviceConnections.set("office", ws);            // для settings_sync lookup
+          deviceConnections.set("office_humidifier", ws);
+          deviceConnections.set("window", ws);
+        }
+        if (sensorMessage.room === "hallway") {
+          deviceConnections.set("office", ws);            // тот же ESP (hallway_office)
+          deviceConnections.set("hall_light", ws);
         }
 
         // Broadcast to all connected clients (including sender)
